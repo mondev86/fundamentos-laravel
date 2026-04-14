@@ -4,6 +4,8 @@
 ![PHP](https://img.shields.io/badge/PHP-8.2+-purple)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
+![App Screenshot](./public/screenshot.png)
+
 Aplicación interactiva para estudiar fundamentos de Laravel y prepararse para pruebas técnicas y entrevistas.
 
 ## Contenido

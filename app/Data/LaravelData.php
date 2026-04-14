@@ -500,6 +500,532 @@ CODE,
                     ['q' => '¿Qué método simula un usuario autenticado en un Feature Test?', 'options' => ['$this->login($user)', '$this->auth($user)', '$this->actingAs($user)', '$this->withUser($user)'], 'answer' => 2],
                 ],
             ],
+            [
+                'slug' => 'controllers',
+                'title' => 'Controllers',
+                'icon' => '🎮',
+                'sections' => [
+                    [
+                        'title' => 'Controladores Básicos',
+                        'content' => 'Los controladores agrupan la lógica de negocio. Reciben la petición HTTP y retornan una respuesta.',
+                        'code' => <<<'CODE'
+// Crear controlador
+php artisan make:controller PostController
+
+// Controlador básico
+class PostController extends Controller
+{
+    public function index(): View
+    {
+        $posts = Post::latest()->get();
+        return view('posts.index', compact('posts'));
+    }
+
+    public function store(PostRequest $request): RedirectResponse
+    {
+        Post::create($request->validated());
+        return redirect()->route('posts.index');
+    }
+
+    public function show(Post $post): View
+    {
+        return view('posts.show', compact('post'));
+    }
+
+    public function edit(Post $post): View
+    {
+        return view('posts.edit', compact('post'));
+    }
+
+    public function update(PostRequest $request, Post $post): RedirectResponse
+    {
+        $post->update($request->validated());
+        return redirect()->route('posts.show', $post);
+    }
+
+    public function destroy(Post $post): RedirectResponse
+    {
+        $post->delete();
+        return redirect()->route('posts.index');
+    }
+}
+CODE,
+                        'tip' => 'Usa --resource para generar un controlador con los 7 métodos CRUD: php artisan make:controller PostController --resource',
+                    ],
+                    [
+                        'title' => 'Resource Controllers',
+                        'content' => 'Los resource controllers proporcionan métodos RESTful estándar para CRUD.',
+                        'code' => <<<'CODE'
+// Rutas resource (automático)
+Route::resource('posts', PostController::class);
+
+// Métodos del resource controller:
+// index   - GET /posts        - Listar todos
+// create  - GET /posts/create - Mostrar formulario
+// store   - POST /posts      - Guardar nuevo
+// show    - GET /posts/{id}  - Mostrar uno
+// edit    - GET /posts/{id}/edit - Editar formulario
+// update  - PUT/PATCH /posts/{id} - Actualizar
+// destroy - DELETE /posts/{id}   - Eliminar
+
+// Solo algunos métodos
+Route::resource('posts', PostController::class)->only(['index', 'show']);
+Route::resource('posts', PostController::class)->except(['destroy']);
+CODE,
+                        'tip' => 'Route::apiResource() excluye create y edit (no necesarios en APIs). Combina con Route::resources() para múltiples recursos.',
+                    ],
+                    [
+                        'title' => 'Dependencia en Controladores',
+                        'content' => 'Inyecta dependencias en el constructor o directamente en los métodos.',
+                        'code' => <<<'CODE'
+// Inyección en constructor
+class UserController extends Controller
+{
+    protected UserService $userService;
+
+    public function __construct(UserService $userService)
+    {
+        $this->userService = $userService;
+        $this->middleware('auth')->except('index');
+    }
+
+    public function update(UpdateUserRequest $request, int $id): RedirectResponse
+    {
+        $this->userService->update($id, $request->validated());
+        return back()->with('success', 'Usuario actualizado');
+    }
+}
+
+// Inyección directa en método
+public function show(Request $request, User $user)
+{
+    // $request tiene la petición actual
+    // $user tiene el modelo inyectado por Route Model Binding
+}
+CODE,
+                        'tip' => 'Laravel resuelve automáticamente las dependencias tipeadas. Si la clase no existe, lanza error claro. Usa interfaces para facilitar testing.',
+                    ],
+                ],
+                'quiz' => [
+                    ['q' => '¿Qué comando crea un resource controller?', 'options' => ['php artisan make:controller Post --resource', 'php artisan make:controller PostController --resource', 'php artisan make:resource PostController', 'php artisan controller:make PostController'], 'answer' => 1],
+                    ['q' => '¿Qué método de resource controller responde a POST /posts?', 'options' => ['index', 'create', 'store', 'show'], 'answer' => 2],
+                    ['q' => '¿Cómo se llama la técnica de inyectar modelos en controladores por la ruta?', 'options' => ['Route Binding', 'Route Model Binding', 'Model Injection', 'Dependency Injection'], 'answer' => 1],
+                ],
+            ],
+            [
+                'slug' => 'events-listeners',
+                'title' => 'Events & Listeners',
+                'icon' => '🔔',
+                'sections' => [
+                    [
+                        'title' => 'Sistema de Eventos',
+                        'content' => 'Events y Listeners desacoplan lógica. Un evento puede tener múltiples listeners que reaccionan.',
+                        'code' => <<<'CODE'
+// Crear
+php artisan make:event OrderPlaced
+php artisan make:listener SendOrderConfirmation --event=OrderPlaced
+
+// Evento
+class OrderPlaced extends Event
+{
+    use Dispatchable, InteractsWithSockets, SerializesModels;
+
+    public function __construct(public Order $order) {}
+}
+
+// Listener
+class SendOrderConfirmation
+{
+    public function handle(OrderPlaced $event): void
+    {
+        Mail::to($event->order->user)->send(new OrderConfirmation($event->order));
+    }
+}
+
+// Registrar en EventServiceProvider (Laravel <11) o en AppServiceProvider
+protected $listen = [
+    OrderPlaced::class => [
+        SendOrderConfirmation::class,
+        UpdateInventory::class,
+        SendAdminNotification::class,
+    ],
+];
+
+// Disparar evento
+event(new OrderPlaced($order));
+CODE,
+                        'tip' => 'Usa Event::fake() en tests para evitar ejecutar listeners reales. Los eventos son ideales para lógica que no debe estar en el controlador.',
+                    ],
+                ],
+                'quiz' => [
+                    ['q' => '¿Qué comando crea un evento y listener juntos?', 'options' => ['php artisan make:event-listener', 'php artisan event:generate', 'php artisan make:event Listener', 'php artisan generate:event-listener'], 'answer' => 1],
+                    ['q' => '¿Cómo se dispara un evento manualmente?', 'options' => ['Event::fire(new OrderPlaced($order))', 'event(new OrderPlaced($order))', 'OrderPlaced::dispatch($order)', 'OrderPlaced::trigger($order)'], 'answer' => 1],
+                ],
+            ],
+            [
+                'slug' => 'notifications',
+                'title' => 'Notifications',
+                'icon' => '📧',
+                'sections' => [
+                    [
+                        'title' => 'Notificaciones en Laravel',
+                        'content' => 'Laravel Notifications permite enviar mensajes por múltiples canales (mail, SMS, Slack, DB).',
+                        'code' => <<<'CODE'
+// Crear notificación
+php artisan make:notification OrderShipped
+
+class OrderShipped extends Notification
+{
+    public function __construct(public Order $order) {}
+
+    public function via(object $notifiable): array
+    {
+        return ['mail', 'database', 'slack'];
+    }
+
+    public function toMail(object $notifiable): MailMessage
+    {
+        return (new MailMessage)
+            ->subject('Tu orden ha sido enviada')
+            ->line("Orden #{$this->order->id}")
+            ->action('Ver orden', url('/orders/' . $this->order->id))
+            ->line('Gracias por tu compra');
+    }
+
+    public function toArray(object $notifiable): array
+    {
+        return ['order_id' => $this->order->id, 'status' => 'shipped'];
+    }
+}
+
+// Enviar
+$user->notify(new OrderShipped($order));
+Notification::send($users, new OrderShipped($order));
+
+// Enviar luego (queue)
+$user->notify((new OrderShipped($order))->delay(now()->addMinutes(5)));
+CODE,
+                        'tip' => 'Usa ShouldQueue en la notificación para enviarla asíncronamente. Las notificaciones en DB se ven con Notification::unreadNotifications().',
+                    ],
+                ],
+                'quiz' => [
+                    ['q' => '¿Qué método define los canales de una notificación?', 'options' => ['channels()', 'via()', 'send()', 'routes()'], 'answer' => 1],
+                    ['q' => '¿Cómo enviar una notificación a múltiples usuarios?', 'options' => ['$user->notifyMany()', 'Notification::send()', 'Notification::batch()', 'notify()->all()'], 'answer' => 1],
+                ],
+            ],
+            [
+                'slug' => 'api-resources',
+                'title' => 'API Resources',
+                'icon' => '🌐',
+                'sections' => [
+                    [
+                        'title' => 'Transformación de Datos API',
+                        'content' => 'API Resources transforman modelos Eloquent a JSON. Separación clara entre estructura interna y respuesta API.',
+                        'code' => <<<'CODE'
+// Crear
+php artisan make:resource PostResource
+php artisan make:resource PostCollection
+
+// Resource (transforma un item)
+class PostResource extends JsonResource
+{
+    public function toArray(Request $request): array
+    {
+        return [
+            'id' => $this->id,
+            'title' => $this->title,
+            'slug' => $this->whenPivotLoaded('post_tags', $this->pivot->slug),
+            'author' => new UserResource($this->whenLoaded('user')),
+            'tags' => TagResource::collection($this->whenLoaded('tags')),
+            'published_at' => $this->published_at?->toIso8601String(),
+            'created_at' => $this->created_at->timestamp,
+            'meta' => [
+                'can_edit' => $request->user()?->can('update', $this->resource),
+            ],
+        ];
+    }
+}
+
+// Collection (transforma colección)
+class PostCollection extends ResourceCollection
+{
+    public function toArray(Request $request): array
+    {
+        return [
+            'data' => $this->collection,
+            'meta' => [
+                'total' => $this->total(),
+                'per_page' => $this->perPage(),
+            ],
+        ];
+    }
+}
+
+// Uso en controlador
+return PostResource::collection(Post::with('user', 'tags')->paginate(10));
+return new PostResource($post);
+CODE,
+                        'tip' => 'Usa $this->whenLoaded() para evitar cargar relaciones si no están disponibles. Cuando loaded() está disponible, solo entonces incluye el dato.',
+                    ],
+                ],
+                'quiz' => [
+                    ['q' => '¿Qué comando crea un API Resource?', 'options' => ['php artisan make:api-resource', 'php artisan make:resource', 'php artisan make:api', 'php artisan make:json-resource'], 'answer' => 1],
+                    ['q' => '¿Qué método evita incluir datos si la relación no está cargada?', 'options' => ['whenLoaded()', 'ifLoaded()', 'checkLoaded()', 'isLoaded()'], 'answer' => 0],
+                ],
+            ],
+            [
+                'slug' => 'sessions',
+                'title' => 'Sessions & Cookies',
+                'icon' => '🍪',
+                'sections' => [
+                    [
+                        'title' => 'Session en Laravel',
+                        'content' => 'Las sesiones permiten almacenar datos del usuario entre peticiones HTTP.',
+                        'code' => <<<'CODE'
+// Leyendo sesión
+$value = session('key');
+$value = session()->get('key');
+$value = $request->session()->get('key');
+
+// Con valor por defecto
+session()->get('key', 'default');
+session()->get('key', fn() => expensiveOperation());
+
+// Escribir sesión
+session(['key' => 'value']);
+$request->session()->put('key', 'value');
+
+// Olvdar valor
+$request->session()->forget('key');
+$request->session()->flush(); // borrar todo
+
+// Flash (solo para la siguiente petición)
+$request->session()->flash('status', 'Task completed!');
+$request->session()->reflash(); // mantener todos los flashes
+
+// Verificar existencia
+session()->has('key');
+session()->exists('key'); // existe aunque sea null
+CODE,
+                        'tip' => 'session() helper globally available es más limpio que $request->session(). En entrevistas: diferencia entre flash y put? flash dura solo una request.',
+                    ],
+                ],
+                'quiz' => [
+                    ['q' => '¿Qué método de sesión dura solo una petición?', 'options' => ['put()', 'flash()', 'keep()', 'store()'], 'answer' => 1],
+                    ['q' => '¿Cuál es la diferencia entre has() y exists()?', 'options' => ['has() verifica no null, exists() verifica existencia', 'Son idénticos', 'exists() es más lento', 'has() no existe en Laravel'], 'answer' => 0],
+                ],
+            ],
+            [
+                'slug' => 'file-storage',
+                'title' => 'File Storage',
+                'icon' => '📁',
+                'sections' => [
+                    [
+                        'title' => 'Storage & Archivos',
+                        'content' => 'Laravel Storage abstrae el manejo de archivos local o cloud (S3, Dropbox, etc).',
+                        'code' => <<<'CODE'
+// Configurar en config/filesystems.php
+// drivers: local, ftp, sftp, s3, rackspace, dropbox
+
+// Guardar archivo
+Storage::put('file.txt', 'Contenido');
+Storage::put('avatars/'.$user->id.'.jpg', $fileContent);
+
+// Subir archivo desde request
+$path = $request->file('avatar')->store('avatars', 'local');
+$path = $request->file('avatar')->storeAs('avatars', 'nombre.jpg');
+
+// Eliminar
+Storage::delete('file.txt');
+Storage::delete(['file1.txt', 'file2.txt']);
+
+// Leer
+$contents = Storage::get('file.txt');
+$exists = Storage::disk('s3')->exists('file.jpg');
+
+// URL pública
+url(Storage::url('file.txt'));
+
+// Descargar
+return Storage::download('file.txt');
+return Storage::download('file.txt', 'nombre.pdf');
+CODE,
+                        'tip' => 'Usa storage/app/public para archivos públicos (necesita php artisan storage:link). Para cloud, configura .env con credentials y cambia driver a s3.',
+                    ],
+                ],
+                'quiz' => [
+                    ['q' => '¿Qué comando crea el enlace simbólico para storage?', 'options' => ['php artisan storage:link', 'php artisan storage:publish', 'php artisan link:storage', 'php artisan make:storage-link'], 'answer' => 0],
+                    ['q' => '¿Qué método guarda archivo y retorna la ruta?', 'options' => ['save()', 'put()', 'store()', 'upload()'], 'answer' => 2],
+                ],
+            ],
+            [
+                'slug' => 'collections',
+                'title' => 'Collections',
+                'icon' => '📊',
+                'sections' => [
+                    [
+                        'title' => 'Colecciones de Laravel',
+                        'content' => 'Las colecciones son wrapper para arrays con métodos funcionales poderosos.',
+                        'code' => <<<'CODE'
+$posts = Post::all(); // Collection
+
+// Transformar
+$titles = $posts->pluck('title');
+$posts->transform(fn($p) => strtoupper($p->title));
+
+// Filtrar
+$published = $posts->filter(fn($p) => $p->status === 'published');
+$active = $posts->where('active', true);
+
+// Ordenar
+$sorted = $posts->sortBy('created_at');
+$desc = $posts->sortByDesc('id');
+
+// Buscar
+$post = $posts->firstWhere('slug', 'mi-post');
+$first = $posts->first(fn($p) => $p->isFeatured());
+
+// Agregar/remover
+$posts->push($newPost);
+$filtered = $posts->reject(fn($p) => $p->isDraft);
+
+// Métodos de array
+$posts->map(fn($p) => $p->title)->toArray();
+$posts->sum('price');
+$posts->avg('rating');
+$posts->count();
+
+// Chunk
+$chunks = $posts->chunk(10);
+foreach ($chunks as $chunk) { ... }
+
+// Pipe
+$result = $posts
+    ->filter(fn($p) => $p->published)
+    ->sortBy('date')
+    ->take(5)
+    ->pluck('title');
+CODE,
+                        'tip' => 'Usa pipe() para encadenar muchas operaciones: $collection->pipe(fn($c) => $c->first()). Las colecciones son lazy con métodos como map() pero eager con all().',
+                    ],
+                ],
+                'quiz' => [
+                    ['q' => '¿Qué método extrae una sola columna como array?', 'options' => ['map()', 'pluck()', 'extract()', 'column()'], 'answer' => 1],
+                    ['q' => '¿Qué método divide una colección en grupos?', 'options' => ['split()', 'partition()', 'chunk()', 'group()'], 'answer' => 2],
+                ],
+            ],
+            [
+                'slug' => 'error-handling',
+                'title' => 'Manejo de Errores',
+                'icon' => '🚨',
+                'sections' => [
+                    [
+                        'title' => 'Excepciones y Handler',
+                        'content' => 'Laravel maneja errores automáticamente. El Exception Handler (app/Exceptions/Handler.php) decide cómo renderizar cada tipo de excepción.',
+                        'code' => <<<'CODE'
+// Generar excepción personalizada
+throw new \Exception('Algo salió mal');
+throw new \RuntimeException('Error de runtime');
+
+// Excepciones HTTP
+throw new \Illuminate\Http\Exception\HttpResponseException(
+    response()->json(['error' => 'No autorizado'], 401)
+);
+throw new \Symfony\Component\HttpKernel\Exception\NotFoundHttpException();
+throw new ModelNotFoundException::forModel(Post::class);
+
+// Capturar en controlador
+try {
+    $post = Post::findOrFail($id);
+} catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+    return response()->json(['error' => 'Post no encontrado'], 404);
+}
+
+// Reportar excepción (log)
+try {
+    // código
+} catch (\Exception $e) {
+    report($e); // logea y continúa
+    return back()->with('error', 'Algo falló');
+}
+CODE,
+                        'tip' => 'Usa report($e) para loggear sin interrumpir. En producción, configura .env para evitar mostrar errores: APP_DEBUG=false. Personaliza render() en Handler para excepciones específicas.',
+                    ],
+                    [
+                        'title' => 'Errores HTTP Personalizados',
+                        'content' => 'Personaliza las páginas de error 404, 500, etc. en resources/views/errors/',
+                        'code' => <<<'CODE'
+// Crear página de error personalizada
+// resources/views/errors/404.blade.php
+@extends('errors::layout')
+@section('title', 'Página no encontrada')
+@section('message', 'La página que buscas no existe.')
+
+// Error 500
+resources/views/errors/500.blade.php
+
+// Para APIs, las respuestas JSON son automáticas
+// config/error-logging.php para configurar logueo
+
+// Excepciones personalizadas
+php artisan make:exception CustomException
+
+class CustomException extends \Exception
+{
+    public function __construct(string $message = "", int $code = 0, ?\Throwable $previous = null)
+    {
+        parent::__construct($message, $code, $previous);
+    }
+}
+CODE,
+                        'tip' => 'Usa abort(404), abort(403), abort(500) en cualquier momento. Para APIs, las respuestas son JSON automáticamente. Configura APP_DEBUG=false en producción.',
+                    ],
+                    [
+                        'title' => 'Validación y Errores',
+                        'content' => 'Los errores de validación se manejan automáticamente y se pasan a la vista como variable $errors.',
+                        'code' => <<<'CODE'
+// Validación básica en controlador
+$request->validate([
+    'title' => 'required|string|max:255',
+    'email' => 'required|email|unique:users',
+]);
+
+// Validación manual
+$validator = Validator::make($request->all(), rules: [
+    'name' => 'required',
+]);
+
+if ($validator->fails()) {
+    return back()
+        ->withErrors($validator)
+        ->withInput();
+}
+
+// En Blade - mostrar errores
+@if($errors->any())
+    <ul>
+    @foreach($errors->all() as $error)
+        <li>{{ $error }}</li>
+    @endforeach
+    </ul>
+@endif
+
+// Error específico
+<input type="text" name="title">
+@error('title')
+    <span class="error">{{ $message }}</span>
+@enderror
+CODE,
+                        'tip' => '$errors está disponible en todas las vistas automáticamente. Usa withErrors() para pasar errores personalizados. En APIs, retorna 422 con JSON de errores.',
+                    ],
+                ],
+                'quiz' => [
+                    ['q' => '¿Qué método loguea una excepción sin interrumpir?', 'options' => ['log()', 'report()', 'catch()', 'notify()'], 'answer' => 1],
+                    ['q' => '¿Qué archivo crea las páginas de error personalizadas?', 'options' => ['resources/views/errors/*.blade.php', 'resources/views/pages/error.blade.php', 'app/Http/Errors/*.php', 'config/errors.php'], 'answer' => 0],
+                    ['q' => '¿Qué variable global tiene los errores de validación en Blade?', 'options' => ['$error', '$errors', '$validation', '$messages'], 'answer' => 1],
+                    ['q' => '¿Qué hace abort(404)?', 'options' => ['Redirige a /404', 'Lanza NotFoundHttpException', 'Loggea error', 'Envía email'], 'answer' => 1],
+                ],
+            ],
         ];
     }
 
@@ -513,7 +1039,14 @@ CODE,
             ['q' => '¿Qué son los Observers en Eloquent?', 'a' => 'Clases que escuchan eventos del modelo (creating, created, updating, updated, deleting, deleted). Útiles para extraer lógica del modelo. php artisan make:observer UserObserver --model=User. Se registran en AppServiceProvider::boot() con User::observe(UserObserver::class).'],
             ['q' => '¿Diferencia entre session() y cache()?', 'a' => 'session() es específica del usuario (almacena datos por usuario entre requests). cache() es compartida entre todos los usuarios (ideal para datos costosos de calcular como configuraciones, listas estáticas). Cache tiene drivers: file, redis, memcached.'],
             ['q' => '¿Cuándo usarías un Event/Listener vs un Job?', 'a' => 'Events/Listeners: para desacoplar acciones del sistema (UserRegistered → SendWelcomeEmail, NotifyAdmin). Varios listeners pueden reaccionar a un evento. Jobs: para trabajo diferido o pesado específico. Un Job hace una cosa. Los Listeners pueden despachar Jobs.'],
-            ['q' => '¿Qué es eager loading condicional (lazy eager loading)?', 'a' => 'load() carga relaciones en una colección ya obtenida: $posts = Post::all(); $posts->load("author"). Útil cuando no sabes si necesitarás la relación hasta después de obtener los datos. Diferente de with() que va en la query inicial.'],
+            ['q' => '¿Qué es eager loading condicional (lazy eager loading)?', 'a' => 'load() carga relaciones en una colección ya obtenida: $posts = Post::all(); $posts->load("author"). Útil cuando no sabes si necesitas la relación hasta después de obtener los datos. Diferente de with() que va en la query inicial.'],
+            ['q' => '¿Cuál es la diferencia entre un Controller y un Resource Controller?', 'a' => 'Un Controller básico puede tener cualquier método personalizado. Un Resource Controller tiene métodos RESTful estándar (index, create, store, show, edit, update, destroy) mapeados a rutas CRUD automáticamente con Route::resource().'],
+            ['q' => '¿Qué es Route Model Binding?', 'a' => 'Es la inyección automática de modelos en controladores. Laravel busca un registro en la BD por el ID de la ruta y lo inyecta. Si no existe, lanza 404 automáticamente. Personalizable con resolve() o route key name.'],
+            ['q' => '¿Cuándo usarías Events vs Jobs?', 'a' => 'Events: para notificaciones de algo que ocurrió (uno a muchos listeners). Jobs: para ejecutar una tarea específica, usualmente diferida. Los listeners pueden despachar jobs. Un evento es "algo pasó", un job es "haz esta tarea".'],
+            ['q' => '¿Para qué sirve una API Resource en Laravel?', 'a' => 'Transforma modelos Eloquent a JSON estructurado para APIs. Permite controlar exactamente qué campos se exponen, renombrar, anidar relaciones, y añadir meta-información. Además permite formato condicional según permisos del usuario.'],
+            ['q' => '¿Cuál es la diferencia entre session() y cache()?', 'a' => 'Session es por usuario (datos específicos de una sesión de usuario). Cache es global (datos compartidos entre todos los usuarios). Ejemplo session: carrito de compras. Ejemplo cache: configuración de la app que se lee frecuentemente.'],
+            ['q' => '¿Qué es el problema N+1 y cómo evitarlo en Laravel?', 'a' => 'Hacer N+1 queries sin querer. Post::all() luego foreach $post->author = N+1. Solución: Post::with("author")->get() = 2 queries. También with(["author", "comments"]) para múltiples relaciones.'],
+            ['q' => '¿Qué son los Accessors y Mutators en Eloquent?', 'a' => 'Accessors: transformar dato al leerlo (getNameAttribute). Mutators: transformar dato al guardarlo (setNameAttribute). Definidos en el modelo como métodos: function getXxxAttribute() / function setXxxAttribute().'],
         ];
     }
 }
